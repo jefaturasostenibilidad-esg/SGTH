@@ -1,0 +1,6 @@
+{
+  "name": "Sistema de Gestión de Talento Humano",
+  "description": "Sistema de Gestión de Talento Humano completo, seguro y en tiempo real, integrado con políticas de seguridad de la información SGSI (ISO/IEC 27001), dashboard analítico interactivo, control de accesos, auditoría completa y reportes gerenciales en Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
