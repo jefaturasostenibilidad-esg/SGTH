@@ -145,8 +145,16 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Error al guardar el programa');
+        let errorData: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText || 'Error al guardar el programa'}`);
       }
 
       setShowNewProgramModal(false);
@@ -183,8 +191,16 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Error al eliminar programa');
+        let errorData: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText || 'Error al eliminar programa'}`);
       }
 
       await fetchStats();
@@ -208,8 +224,16 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Error al eliminar matrícula');
+        let errorData: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText || 'Error al eliminar matrícula'}`);
       }
 
       await fetchStats();
@@ -244,8 +268,16 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Error al registrar matrícula');
+        let errorData: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText || 'Error al registrar matrícula'}`);
       }
 
       setShowEnrollModal(false);

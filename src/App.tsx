@@ -181,9 +181,18 @@ export default function App() {
         body: JSON.stringify({ email })
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          console.error('Failed to parse response JSON:', parseErr);
+        }
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || 'Fallo de autenticación');
+        throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'Error de comunicación'}`);
       }
 
       localStorage.setItem('sgth_token', data.token);
@@ -209,9 +218,18 @@ export default function App() {
         body: JSON.stringify({ email: regEmail, full_name: regName, role: regRole })
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          console.error('Failed to parse response JSON:', parseErr);
+        }
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || 'Error registrando solicitud');
+        throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'Error registrando solicitud'}`);
       }
 
       setRegSuccess(true);
@@ -264,9 +282,18 @@ export default function App() {
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    let data: any = {};
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error('Failed to parse response JSON:', parseErr);
+      }
+    }
+
     if (!res.ok) {
-      throw new Error(data.error || 'No se pudo guardar el colaborador');
+      throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'No se pudo guardar el colaborador'}`);
     }
 
     // Refresh state
@@ -288,8 +315,16 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error procesando la solicitud');
+        let data: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'Error procesando la solicitud'}`);
       }
 
       await fetchAllData(authToken);
@@ -316,8 +351,16 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error procesando solicitud');
+        let data: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'Error procesando solicitud'}`);
       }
 
       await fetchAllData(authToken);
@@ -343,8 +386,16 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error actualizando usuario');
+        let data: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'Error actualizando usuario'}`);
       }
 
       await fetchAllData(authToken);
