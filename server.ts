@@ -5,8 +5,10 @@
 
 import express, { Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
 import { db } from './src/lib/db-store';
 import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit-table';
 
 const app = express();
 const PORT = 3000;
@@ -393,6 +395,39 @@ const PORT = 3000;
     res.json(targetUser);
   });
 
+  app.delete('/api/admin/users/:id', (req, res) => {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    if (!user) return res.status(401).json({ error: 'No autorizado' });
+    if (user.role !== 'superadmin') return res.status(403).json({ error: 'Acceso denegado' });
+
+    const targetIndex = db.profiles.findIndex(p => p.id === id);
+    if (targetIndex === -1) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    // Prevent deleting oneself
+    if (db.profiles[targetIndex].email === user.email) {
+      return res.status(400).json({ error: 'No puedes eliminar tu propio usuario' });
+    }
+
+    const deletedUser = db.profiles[targetIndex];
+    db.profiles.splice(targetIndex, 1);
+
+    db.logAuditEvent(
+      'USER_DELETED',
+      'profiles',
+      id,
+      { email: deletedUser.email, role: deletedUser.role },
+      null,
+      user,
+      undefined,
+      'CRITICAL'
+    );
+
+    db.saveDatabase();
+    res.json({ message: 'Usuario eliminado correctamente' });
+  });
+
   // Simulated Email Inbox endpoint
   app.get('/api/email/simulated-inbox', (req, res) => {
     res.json(db.emails);
@@ -703,8 +738,22 @@ const PORT = 3000;
       const coverSheet = workbook.addWorksheet('📊 Resumen Ejecutivo');
       
       coverSheet.views = [{ showGridLines: false }];
-      coverSheet.mergeCells('B2:I4');
-      const titleCell = coverSheet.getCell('B2');
+      
+      const logoPath = path.join(process.cwd(), 'public', 'images', 'Logo_corpo.png');
+      if (fs.existsSync(logoPath)) {
+        const imageId = workbook.addImage({
+          filename: logoPath,
+          extension: 'png',
+        });
+        // Add image to A1:B4
+        coverSheet.addImage(imageId, {
+          tl: { col: 1, row: 1 },
+          br: { col: 2, row: 4 }
+        });
+      }
+
+      coverSheet.mergeCells('C2:I4');
+      const titleCell = coverSheet.getCell('C2');
       titleCell.value = 'SISTEMA DE GESTIÓN DE TALENTO HUMANO (SGTH)';
       titleCell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6C3CE1' } };
@@ -918,6 +967,127 @@ const PORT = 3000;
       to: { row: 1, column: headers.length }
     };
   }
+
+  // --- MÓDULO 5.5: 🗄️ BOTÓN "BASE DE DATOS" — Descarga Gerencial con PDF ---
+  app.get('/api/admin/export-database-pdf', async (req, res) => {
+    const token = req.query.token as string;
+    if (!token) {
+      return res.status(401).send('No autorizado. Token requerido.');
+    }
+
+    const user = db.profiles.find(p => p.email === token && p.is_active);
+    if (!user || user.role !== 'superadmin') {
+      db.logAuditEvent(
+        'UNAUTHORIZED_EXPORT_ATTEMPT_PDF',
+        'employees',
+        undefined,
+        null,
+        { token_attempted: token },
+        null,
+        undefined,
+        'CRITICAL'
+      );
+      return res.status(403).send('No autorizado. Se requieren privilegios de Superadmin.');
+    }
+
+    try {
+      console.log(`Generando exportación de PDF para ${user.email}...`);
+      
+      const employeesData = db.getEmployees(user.role);
+      const kpis = db.getDashboardKPIs();
+
+      // Initialize PDFKit
+      const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+      const filename = `SGTH_Export_EVECA_${new Date().toISOString().slice(0, 10)}.pdf`;
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      doc.pipe(res);
+
+      // Logo (if exists)
+      const logoPath = path.join(process.cwd(), 'public', 'images', 'Logo_corpo.png');
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, 30, 30, { width: 100 });
+        doc.moveDown(2);
+      }
+
+      // Title
+      doc.fontSize(22).fillColor('#3C1E8F').text('SISTEMA DE GESTIÓN DE TALENTO HUMANO (SGTH)', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(12).fillColor('#475569').text(`EVECA · Reporte Gerencial de Seguridad (SGSI ISO 27001) · Generado el ${new Date().toLocaleDateString('es-CO')}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Executive Summary KPIs
+      doc.fontSize(16).fillColor('#000000').text('Resumen Ejecutivo (KPIs)', { underline: true });
+      doc.moveDown(1);
+      
+      const kpiTable = {
+        title: "Métricas Clave",
+        headers: ["Indicador", "Valor"],
+        rows: [
+          ["Total Colaboradores Activos", kpis.total_employees.toString()],
+          ["Porcentaje de Hombres", `${kpis.pct_male}%`],
+          ["Porcentaje de Mujeres", `${kpis.pct_female}%`],
+          ["Promedio de Permanencia en Cargo", `${kpis.avg_years_in_role} años`],
+          ["Índice de Personal Insatisfecho", `${kpis.pct_unsatisfied}%`],
+          ["Tasa Consolidada de Ausentismo", `${kpis.absence_rate}%`]
+        ]
+      };
+      await doc.table(kpiTable, { width: 400 });
+      doc.moveDown(2);
+
+      // Employees Directory
+      doc.addPage();
+      doc.fontSize(16).text('Directorio Activo de Colaboradores', { underline: true });
+      doc.moveDown(1);
+      
+      const empTable = {
+        headers: ["Código", "Nombre Completo", "Departamento", "Cargo", "Estado", "Salario (Mensual)", "Ingreso"],
+        rows: employeesData.slice(0, 50).map(e => [
+          e.employee_code,
+          e.full_name,
+          e.department_name || 'N/A',
+          e.position_title || 'N/A',
+          e.status,
+          `$${Number(e.salary).toLocaleString('es-CO')}`,
+          new Date(e.hire_date).toLocaleDateString('es-CO')
+        ])
+      };
+      
+      await doc.table(empTable, {
+        prepareHeader: () => doc.font("Helvetica-Bold").fontSize(8),
+        prepareRow: () => doc.font("Helvetica").fontSize(8)
+      });
+      
+      if (employeesData.length > 50) {
+        doc.moveDown(1);
+        doc.fontSize(10).fillColor('#666666').text(`* Mostrando los primeros 50 registros de ${employeesData.length} totales.`, { align: 'center' });
+      }
+
+      // Write Log
+      db.logAuditEvent(
+        'DATABASE_EXPORT_PDF',
+        'all_tables',
+        undefined,
+        null,
+        {
+          format: 'pdf',
+          total_employees: employeesData.length,
+          export_timestamp: new Date().toISOString()
+        },
+        user,
+        undefined,
+        'WARN' // Every export of data is a WARN level security action
+      );
+
+      doc.end();
+
+    } catch (err: any) {
+      console.error('Error exporting PDF:', err);
+      res.status(500).send(`Error generando el reporte PDF: ${err.message}`);
+    }
+  });
 
   // --- VITE MIDDLEWARE SETUP ---
   const setupViteOrStatic = async () => {

@@ -10,10 +10,11 @@ import { Users, Shield, CheckCircle2, XCircle, AlertCircle, RefreshCcw } from 'l
 interface UserRoleManagerProps {
   users: Profile[];
   onUpdateUser: (id: string, updates: { role?: UserRole; is_active?: boolean }) => Promise<void>;
+  onDeleteUser?: (id: string) => Promise<void>;
   loadingId: string | null;
 }
 
-export function UserRoleManager({ users, onUpdateUser, loadingId }: UserRoleManagerProps) {
+export function UserRoleManager({ users, onUpdateUser, onDeleteUser, loadingId }: UserRoleManagerProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
@@ -32,6 +33,20 @@ export function UserRoleManager({ users, onUpdateUser, loadingId }: UserRoleMana
       await onUpdateUser(userId, { is_active: !currentActive });
     } catch (err: any) {
       setError(err.message || 'No se pudo actualizar el estado activo.');
+    }
+  };
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDelete = async (userId: string) => {
+    try {
+      setError(null);
+      if (onDeleteUser) {
+        await onDeleteUser(userId);
+      }
+      setConfirmDeleteId(null);
+    } catch (err: any) {
+      setError(err.message || 'No se pudo eliminar el usuario.');
     }
   };
 
@@ -136,23 +151,52 @@ export function UserRoleManager({ users, onUpdateUser, loadingId }: UserRoleMana
                     {isSelf ? (
                       <span className="text-[10px] text-slate-500 italic select-none">No modificable</span>
                     ) : (
-                      <button
-                        disabled={isLoading}
-                        onClick={() => handleToggleActive(profile.id, profile.is_active)}
-                        className={`px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all duration-200 cursor-pointer ${
-                          profile.is_active 
-                            ? 'bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 border border-rose-900/30' 
-                            : 'bg-emerald-950/20 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-900/30'
-                        }`}
-                      >
-                        {isLoading ? (
-                          <RefreshCcw className="w-3 h-3 animate-spin mx-auto" />
-                        ) : profile.is_active ? (
-                          'Suspender'
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          disabled={isLoading}
+                          onClick={() => handleToggleActive(profile.id, profile.is_active)}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all duration-200 cursor-pointer ${
+                            profile.is_active 
+                              ? 'bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 border border-rose-900/30' 
+                              : 'bg-emerald-950/20 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-900/30'
+                          }`}
+                        >
+                          {isLoading ? (
+                            <RefreshCcw className="w-3 h-3 animate-spin mx-auto" />
+                          ) : profile.is_active ? (
+                            'Suspender'
+                          ) : (
+                            'Activar'
+                          )}
+                        </button>
+                        {confirmDeleteId === profile.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              disabled={isLoading}
+                              onClick={() => handleDelete(profile.id)}
+                              className="px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all duration-200 cursor-pointer bg-red-600 hover:bg-red-500 text-white shadow-md"
+                            >
+                              {isLoading ? <RefreshCcw className="w-3 h-3 animate-spin mx-auto" /> : 'Confirmar'}
+                            </button>
+                            <button
+                              disabled={isLoading}
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all duration-200 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
                         ) : (
-                          'Activar Cuenta'
+                          <button
+                            disabled={isLoading}
+                            onClick={() => setConfirmDeleteId(profile.id)}
+                            className="px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all duration-200 cursor-pointer bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/50"
+                            title="Eliminar usuario permanentemente"
+                          >
+                            {isLoading ? <RefreshCcw className="w-3 h-3 animate-spin mx-auto" /> : 'Eliminar'}
+                          </button>
                         )}
-                      </button>
+                      </div>
                     )}
                   </td>
                 </tr>

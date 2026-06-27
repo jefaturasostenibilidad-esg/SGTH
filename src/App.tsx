@@ -166,10 +166,10 @@ export default function App() {
     if (authToken && currentUser) {
       setLoading(false);
 
-      // Realtime Simulation: update dashboard every 12 seconds to reflect live updates
+      // Realtime Simulation: update dashboard every 60 seconds to reflect live updates
       const interval = setInterval(() => {
         fetchAllData(authToken);
-      }, 12000);
+      }, 60000);
 
       return () => clearInterval(interval);
     }
@@ -411,6 +411,39 @@ export default function App() {
     }
   };
 
+  // Admin: Delete user profile
+  const handleDeleteUser = async (userId: string) => {
+    if (!authToken) return;
+    setActionLoadingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!res.ok) {
+        let data: any = {};
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            data = await res.json();
+          } catch (e) {
+            console.error('Failed to parse error response JSON:', e);
+          }
+        }
+        throw new Error(data.error || 'Error al eliminar usuario');
+      }
+
+      await fetchAllData(authToken);
+    } catch (err: any) {
+      throw err;
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   // Admin: Reset database seeds
   const handleResetDatabase = async () => {
     if (!authToken) return;
@@ -466,8 +499,16 @@ export default function App() {
 
         <div className="w-full max-w-md relative z-10 space-y-6">
           <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-purple-950/40 border border-purple-800/40 rounded-2xl shadow-lg mb-2">
-              <Shield className="w-8 h-8 text-purple-400" />
+            <div className="inline-flex p-2 bg-purple-950/20 border border-purple-800/20 rounded-2xl shadow-lg mb-4">
+              <img 
+                src="/images/Logo_corpo.png" 
+                alt="EVECA Corp." 
+                className="h-14 w-auto object-contain"
+                onError={(e) => { 
+                  e.currentTarget.onerror = null; 
+                  e.currentTarget.src = "/images/Logo_corpo.jpg"; 
+                }} 
+              />
             </div>
             <h1 className="text-2xl font-extrabold text-white tracking-tight uppercase">
               Sistema de Gestión de Talento (SGTH)
@@ -658,8 +699,16 @@ export default function App() {
           {/* Brand Logo Header */}
           <div className="p-5 border-b border-indigo-950 flex items-center justify-between bg-indigo-950/15">
             <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-purple-950/50 border border-purple-800/40 rounded-xl text-purple-400 shadow-inner">
-                <Shield className="w-5 h-5" />
+              <div className="p-1 bg-white/5 border border-purple-800/20 rounded-lg overflow-hidden shadow-inner flex items-center justify-center">
+                <img 
+                  src="/images/Logo_corpo.png" 
+                  alt="EVECA Corp." 
+                  className="h-7 w-auto object-contain"
+                  onError={(e) => { 
+                    e.currentTarget.onerror = null; 
+                    e.currentTarget.src = "/images/Logo_corpo.jpg"; 
+                  }} 
+                />
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-extrabold text-white uppercase tracking-wider leading-none">SGTH</span>
@@ -1301,32 +1350,14 @@ export default function App() {
                 />
               )}
 
-              {adminSubTab === 'roles' && (
-                <UserRoleManager
-                  users={auditLogs.reduce((acc: Profile[], curr) => {
-                    // Assemble a unique list of profiles or fetch from state
-                    return acc;
-                  }, [])} // Fallback using active profiles fetched dynamically
-                  onUpdateUser={handleUpdateUserRole}
-                  loadingId={actionLoadingId}
-                />
-              )}
-
-              {adminSubTab === 'roles' && (
-                /* Fallback loading the user database dynamically */
-                <UserRoleManager
-                  users={departments.reduce((acc: Profile[], curr) => {
-                    // Let's call /api/admin/users in full effect
-                    return acc;
-                  }, [])}
-                  onUpdateUser={handleUpdateUserRole}
-                  loadingId={actionLoadingId}
-                />
-              )}
-
               {/* Injected dynamically below */}
               {adminSubTab === 'roles' && (
-                <UsersDatabaseLoader onUpdateUser={handleUpdateUserRole} loadingId={actionLoadingId} token={authToken} />
+                <UsersDatabaseLoader 
+                  onUpdateUser={handleUpdateUserRole} 
+                  onDeleteUser={handleDeleteUser}
+                  loadingId={actionLoadingId} 
+                  token={authToken} 
+                />
               )}
 
               {adminSubTab === 'audit' && (
@@ -1588,7 +1619,7 @@ export default function App() {
 }
 
 // Subcomponent helper to load profiles dynamically from the back-end via auth credentials
-function UsersDatabaseLoader({ token, onUpdateUser, loadingId }: { token: string | null; onUpdateUser: any; loadingId: string | null }) {
+function UsersDatabaseLoader({ token, onUpdateUser, onDeleteUser, loadingId }: { token: string | null; onUpdateUser: any; onDeleteUser: any; loadingId: string | null }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [fetching, setFetching] = useState(true);
 
@@ -1612,6 +1643,7 @@ function UsersDatabaseLoader({ token, onUpdateUser, loadingId }: { token: string
     <UserRoleManager
       users={profiles}
       onUpdateUser={onUpdateUser}
+      onDeleteUser={onDeleteUser}
       loadingId={loadingId}
     />
   );

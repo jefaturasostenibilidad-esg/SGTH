@@ -79,15 +79,15 @@ export function DatabasePanel({
     fetchStatus();
   }, [authToken]);
 
+  const [confirmReset, setConfirmReset] = useState(false);
+
   const handleReset = async () => {
-    if (!window.confirm('⚠️ ADVERTENCIA SGSI: ¿Está seguro de que desea restaurar la base de datos de Talento Humano a su estado de fábrica? Esto eliminará todos los registros creados durante esta sesión.')) {
-      return;
-    }
     setResetting(true);
     setSuccessMsg(null);
     try {
       await onReset();
       setSuccessMsg('Base de datos restaurada con éxito. Toda la traza ha sido archivada y los registros regresaron al estado seed inicial.');
+      setConfirmReset(false);
       setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err) {
       alert('Error restaurando base de datos');
@@ -351,20 +351,30 @@ create table if not exists audit_logs (
         <div className="space-y-1.5 text-center md:text-left max-w-xl">
           <h3 className="text-sm font-bold text-white flex items-center gap-2 justify-center md:justify-start">
             <DatabaseZap className="w-4 h-4 text-purple-400" />
-            Descarga de Base de Datos Gerencial (.XLSX)
+            Descarga de Base de Datos Gerencial
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Descargue el libro de Excel maestro con múltiples hojas de cálculo formateadas profesionalmente (Resumen Ejecutivo, Base de Colaboradores, Indicadores, Gráficos, Demografía y la Bitácora Completa de Auditoría SGSI). Cada descarga genera un registro obligatorio de Nivel de Advertencia (WARN) en la bitácora inmutable.
+            Descargue el libro maestro con la información de los colaboradores, KPIs, departamentos, bitácora de auditoría SGSI y demás métricas gerenciales.
           </p>
         </div>
 
-        <button
-          onClick={onExport}
-          className="px-6 py-3.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs tracking-wider uppercase shadow-md hover:shadow-purple-500/10 flex items-center gap-2.5 transition-all duration-300 hover:scale-[1.03] shrink-0 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          Descargar Reporte Maestro
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
+          <button
+            onClick={onExport}
+            className="w-full sm:w-auto px-5 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs tracking-wider uppercase shadow-md flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Exportar Excel
+          </button>
+          
+          <button
+            onClick={() => window.open(`/api/admin/export-database-pdf?token=${encodeURIComponent(authToken)}`, '_blank')}
+            className="w-full sm:w-auto px-5 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs tracking-wider uppercase shadow-md flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Exportar PDF
+          </button>
+        </div>
       </div>
 
       {/* Technical tools */}
@@ -374,23 +384,40 @@ create table if not exists audit_logs (
           Como administrador, puede resetear la base de datos de prueba para limpiar las modificaciones y ver el conjunto de datos de fábrica de EVECA.
         </p>
         <div className="pt-2 border-t border-indigo-950/50 flex justify-end">
-          <button
-            onClick={handleReset}
-            disabled={resetting}
-            className="px-4 py-2 text-xs font-bold bg-rose-950/20 text-rose-400 hover:text-white border border-rose-900/40 hover:bg-rose-900/30 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40"
-          >
-            {resetting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Restaurando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-3.5 h-3.5" />
-                Restaurar Semillas de Fábrica
-              </>
-            )}
-          </button>
+          {confirmReset ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleReset}
+                disabled={resetting}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 text-white hover:bg-rose-500 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40"
+              >
+                {resetting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Restaurando...
+                  </>
+                ) : (
+                  'Confirmar Reset'
+                )}
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                disabled={resetting}
+                className="px-3 py-2 text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-lg cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmReset(true)}
+              disabled={resetting}
+              className="px-4 py-2 text-xs font-bold bg-rose-950/20 text-rose-400 hover:text-white border border-rose-900/40 hover:bg-rose-900/30 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Restaurar Semillas de Fábrica
+            </button>
+          )}
         </div>
       </div>
     </div>
