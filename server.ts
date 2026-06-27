@@ -1218,8 +1218,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_on
   setupViteOrStatic();
 
   if (!process.env.VERCEL) {
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`SGTH Enterprise Server running on port ${PORT}`);
+    app.listen(PORT, () => {
+      console.log(`SGTH Server running on port ${PORT}`);
     });
   }
 
