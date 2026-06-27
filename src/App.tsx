@@ -89,6 +89,13 @@ export default function App() {
   const [filterDept, setFilterDept] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
+  // OTP States
+  const [otpStep, setOtpStep] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginOtp, setLoginOtp] = useState('');
+  const [otpTimeLeft, setOtpTimeLeft] = useState(0);
+  const [showSimulatedInbox, setShowSimulatedInbox] = useState(false);
+
   // Registration states
   const [isRegistering, setIsRegistering] = useState(false);
   const [regName, setRegName] = useState('');
@@ -137,29 +144,40 @@ export default function App() {
     }
   }, []);
 
+  // Periodic fetch for simulated emails (debug purposes)
+  useEffect(() => {
+    if (authToken) return;
+    
+    const fetchEmails = () => {
+      fetch('/api/email/simulated-inbox')
+        .then(res => res.json())
+        .then(data => setEmails(data))
+        .catch(err => console.error('Failed to fetch simulated emails:', err));
+    };
+
+    fetchEmails();
+    const interval = setInterval(fetchEmails, 5000);
+    return () => clearInterval(interval);
+  }, [authToken]);
+
   // Check login on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem('sgth_token');
-    if (savedToken) {
-      setAuthToken(savedToken);
-      fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${savedToken}` } })
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error();
-        })
-        .then(data => {
-          setCurrentUser(data.user);
-          fetchAllData(savedToken);
-        })
-        .catch(() => {
-          localStorage.removeItem('sgth_token');
-          setAuthToken(null);
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
+    // Under ISO 27001 requirements, we remove localStorage usage.
+    // Auth starts null.
+    setLoading(false);
   }, [fetchAllData]);
+
+  // OTP Countdown effect
+  useEffect(() => {
+    if (otpStep && otpTimeLeft > 0) {
+      const timer = setInterval(() => {
+        setOtpTimeLeft(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    } else if (otpTimeLeft === 0 && otpStep) {
+      setAuthError('El código OTP ha expirado.');
+    }
+  }, [otpStep, otpTimeLeft]);
 
   // Handle active sessions loaded
   useEffect(() => {
@@ -175,12 +193,12 @@ export default function App() {
     }
   }, [authToken, currentUser, fetchAllData]);
 
-  // Auth: Login action
-  const handleLogin = async (email: string) => {
+  // Auth: Request OTP
+  const handleRequestOtp = async (email: string) => {
     setAuthError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -197,10 +215,44 @@ export default function App() {
       }
 
       if (!res.ok) {
-        throw new Error(data.error || `Error del servidor (${res.status}): ${res.statusText || 'Error de comunicación'}`);
+        throw new Error(data.error || `Error del servidor (${res.status})`);
       }
 
-      localStorage.setItem('sgth_token', data.token);
+      setOtpStep(true);
+      setLoginEmail(email);
+      setOtpTimeLeft(600); // 10 minutes
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auth: Verify OTP and Login
+  const handleVerifyOtp = async (email: string, otp: string) => {
+    setAuthError(null);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp })
+      });
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          console.error('Failed to parse response JSON:', parseErr);
+        }
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || `Error del servidor (${res.status})`);
+      }
+
       setAuthToken(data.token);
       setCurrentUser(data.user);
       await fetchAllData(data.token);
@@ -247,9 +299,11 @@ export default function App() {
 
   // Auth: Logout
   const handleLogout = () => {
-    localStorage.removeItem('sgth_token');
     setAuthToken(null);
     setCurrentUser(null);
+    setOtpStep(false);
+    setLoginEmail('');
+    setLoginOtp('');
     setActiveTab('dashboard');
     setEmployees([]);
     setAuditLogs([]);
@@ -536,46 +590,127 @@ export default function App() {
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h2 className="text-sm font-bold text-white uppercase">Iniciar Sesión de Seguridad</h2>
-                  <p className="text-[11px] text-slate-400">Ingrese su correo electrónico institucional para acceder.</p>
+                  <p className="text-[11px] text-slate-400">
+                    {!otpStep ? 'Ingrese su correo electrónico institucional para acceder.' : 'Ingrese el código OTP enviado a su correo electrónico.'}
+                  </p>
                 </div>
 
-                <div className="space-y-3 pt-2">
-                  <div className="relative">
-                    <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                    <input 
-                      type="email"
-                      id="login-email"
-                      placeholder="Correo Corporativo (Ej. editor@eveca.co)"
-                      className="w-full bg-[#0B0B1A] border border-indigo-950 rounded-xl py-2.5 pl-10 pr-3 text-xs text-white outline-none focus:border-purple-600 font-mono transition-colors"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleLogin((e.target as HTMLInputElement).value);
-                        }
+                {!otpStep ? (
+                  <div className="space-y-3 pt-2">
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                      <input 
+                        type="email"
+                        id="login-email"
+                        placeholder="Correo Corporativo (Ej. editor@eveca.co)"
+                        className="w-full bg-[#0B0B1A] border border-indigo-950 rounded-xl py-2.5 pl-10 pr-3 text-xs text-white outline-none focus:border-purple-600 font-mono transition-colors"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleRequestOtp((e.target as HTMLInputElement).value);
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <button 
+                      disabled={loading}
+                      onClick={() => {
+                        const el = document.getElementById('login-email') as HTMLInputElement;
+                        if (el) handleRequestOtp(el.value);
                       }}
-                    />
+                      className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Solicitar código de acceso'}
+                    </button>
                   </div>
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    <div className="relative">
+                      <input 
+                        type="text"
+                        maxLength={6}
+                        value={loginOtp}
+                        onChange={(e) => setLoginOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="000000"
+                        className="w-full bg-[#0B0B1A] border border-indigo-950 rounded-xl py-3 text-center text-2xl tracking-[0.5em] text-white outline-none focus:border-purple-600 font-mono transition-colors"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleVerifyOtp(loginEmail, loginOtp);
+                          }
+                        }}
+                      />
+                    </div>
 
-                  <button 
-                    onClick={() => {
-                      const el = document.getElementById('login-email') as HTMLInputElement;
-                      if (el) handleLogin(el.value);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg transition-all cursor-pointer"
-                  >
-                    Ingresar con Llave Corporativa
-                  </button>
-                </div>
+                    <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
+                      <span>{loginEmail}</span>
+                      <span className={otpTimeLeft < 60 ? 'text-rose-400' : 'text-emerald-400'}>
+                        {Math.floor(otpTimeLeft / 60)}:{(otpTimeLeft % 60).toString().padStart(2, '0')} min
+                      </span>
+                    </div>
 
+                    <button 
+                      disabled={loading || loginOtp.length !== 6 || otpTimeLeft === 0}
+                      onClick={() => handleVerifyOtp(loginEmail, loginOtp)}
+                      className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Verificar e ingresar'}
+                    </button>
 
+                    <div className="text-center pt-2">
+                      <button 
+                        onClick={() => handleRequestOtp(loginEmail)}
+                        disabled={loading || otpTimeLeft > 540} // disable re-send for first 60 seconds
+                        className="text-purple-400 hover:text-purple-300 font-bold text-[10px] underline transition-colors cursor-pointer disabled:text-slate-600 disabled:cursor-not-allowed"
+                      >
+                        Reenviar código
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                <div className="text-center pt-2">
-                  <button 
-                    onClick={() => { setIsRegistering(true); setRegSuccess(false); }}
-                    className="text-purple-400 hover:text-purple-300 font-bold text-[11px] underline transition-colors cursor-pointer"
-                  >
-                    ¿No tienes acceso? Solicita una cuenta de Editor aquí
-                  </button>
-                </div>
+                {!otpStep && (
+                  <div className="text-center pt-2 space-y-2">
+                    <button 
+                      onClick={() => { setIsRegistering(true); setRegSuccess(false); }}
+                      className="text-purple-400 hover:text-purple-300 font-bold text-[11px] underline transition-colors cursor-pointer block w-full"
+                    >
+                      ¿No tienes acceso? Solicita una cuenta de Editor aquí
+                    </button>
+                    
+                    <div className="pt-4 border-t border-indigo-950/30">
+                      <button 
+                        onClick={() => setShowSimulatedInbox(!showSimulatedInbox)}
+                        className="text-slate-500 hover:text-slate-400 text-[9px] uppercase tracking-widest font-mono transition-colors cursor-pointer"
+                      >
+                        [ Developer Tool: {showSimulatedInbox ? 'Hide' : 'Show'} Simulated Inbox ]
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {showSimulatedInbox && (
+                  <div className="mt-6 pt-4 border-t border-indigo-950/50">
+                    <div className="bg-black/40 rounded-xl p-3 border border-indigo-950/50 max-h-60 overflow-y-auto">
+                      <h4 className="text-[10px] font-bold text-indigo-400 uppercase mb-2 sticky top-0 bg-[#1A1A3A] py-1">Buzón Simulado (Debug)</h4>
+                      <div className="space-y-2">
+                        {emails.length === 0 ? (
+                          <p className="text-[10px] text-slate-600 italic">No hay correos registrados.</p>
+                        ) : (
+                          [...emails].reverse().map(email => (
+                            <div key={email.id} className="p-2 bg-indigo-950/20 rounded border border-indigo-900/30 text-[10px]">
+                              <div className="flex justify-between text-indigo-300 mb-1">
+                                <span className="font-bold">Para: {email.to}</span>
+                                <span className="opacity-50">{new Date(email.timestamp).toLocaleTimeString()}</span>
+                              </div>
+                              <div className="text-white font-medium mb-1">{email.subject}</div>
+                              <div className="text-slate-400 text-[9px] line-clamp-3 bg-black/20 p-1 rounded" dangerouslySetInnerHTML={{ __html: email.html }}></div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               /* ONBOARDING REGISTRATION FORM */

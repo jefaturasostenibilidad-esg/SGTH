@@ -6,12 +6,17 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import jwt from 'jsonwebtoken';
 import { db } from './src/lib/db-store';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit-table';
 
 const app = express();
 const PORT = 3000;
+
+// OTP Store (in-memory as requested)
+const otpStore = new Map<string, { otp: string, expiresAt: number, attempts: number, lockoutUntil?: number }>();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only';
 
   // Body parser
   app.use(express.json());
@@ -24,16 +29,19 @@ const PORT = 3000;
     next();
   });
 
-  // Simple Session Store simulated in memory
-  // In a production app, this would use secure HTTP-only cookies and JWTs.
-  // Under SGSI / ISO 27001 rules, we enforce authorization headers.
+  // SGSI / ISO 27001 Authorization Middleware (JWT based)
   app.use((req, res, next) => {
     const authHeader = req.headers.authorization;
     if (authHeader) {
-      const email = authHeader.replace('Bearer ', '');
-      const profile = db.profiles.find(p => p.email === email && p.is_active);
-      if (profile) {
-        (req as any).user = profile;
+      const token = authHeader.replace('Bearer ', '');
+      try {
+        const payload = jwt.verify(token, JWT_SECRET) as any;
+        const profile = db.profiles.find(p => p.id === payload.id && p.email === payload.email && p.is_active);
+        if (profile) {
+          (req as any).user = profile;
+        }
+      } catch (err) {
+        // Invalid or expired token, silently ignore and user will be unauthenticated
       }
     }
     next();
@@ -46,32 +54,50 @@ const PORT = 3000;
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // Auth: Login
-  app.post('/api/auth/login', (req, res) => {
+  // Auth: Request OTP
+  app.post('/api/auth/request-otp', (req, res) => {
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email es requerido' });
     }
 
-    const profile = db.profiles.find(p => p.email === email);
-    if (!profile) {
-      // Log login attempt fail (Trazabilidad)
-      db.logAuditEvent(
-        'LOGIN_FAILED',
-        'profiles',
-        undefined,
-        null,
-        { attempted_email: email },
-        null,
-        undefined,
-        'WARN'
-      );
-      return res.status(401).json({ error: 'Usuario no registrado' });
+    // Rate limiting / lockout check
+    const existingOtp = otpStore.get(email);
+    if (existingOtp && existingOtp.lockoutUntil && existingOtp.lockoutUntil > Date.now()) {
+      return res.status(429).json({ error: 'Demasiados intentos. Intente más tarde.' });
     }
 
-    if (!profile.is_active) {
+    const profile = db.profiles.find(p => p.email === email && p.is_active);
+    
+    // Generar siempre OTP y logging (previene enumeración)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    otpStore.set(email, { otp, expiresAt, attempts: 0 });
+
+    if (profile) {
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #3C1E8F; padding: 20px; text-align: center;">
+            <h2 style="color: #ffffff; margin: 0;">SISTEMA DE GESTIÓN DE TALENTO HUMANO</h2>
+          </div>
+          <div style="padding: 30px; background-color: #ffffff;">
+            <p style="font-size: 16px; color: #334155;">Hola,</p>
+            <p style="font-size: 16px; color: #334155;">Su código de acceso único (OTP) para ingresar al SGTH es:</p>
+            <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; text-align: center; margin: 20px 0;">
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #6366f1;">${otp}</span>
+            </div>
+            <p style="font-size: 14px; color: #64748b;">Este código expirará en 10 minutos. Por seguridad, no comparta este código con nadie.</p>
+          </div>
+          <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+            <p style="margin: 0;">Mensaje generado automáticamente. ISO 27001 Control A.9.4</p>
+          </div>
+        </div>
+      `;
+      db.sendEmail('SGTH Seguridad <seguridad@eveca.co>', email, '[SGTH] Código de Acceso OTP', emailHtml);
+      
       db.logAuditEvent(
-        'LOGIN_PENDING',
+        'OTP_REQUESTED',
         'profiles',
         profile.id,
         null,
@@ -80,22 +106,89 @@ const PORT = 3000;
         undefined,
         'INFO'
       );
-      return res.status(403).json({ error: 'Usuario pendiente de aprobación' });
+    } else {
+      db.logAuditEvent(
+        'OTP_REQUEST_UNKNOWN_USER',
+        'profiles',
+        undefined,
+        null,
+        { attempted_email: email },
+        null,
+        undefined,
+        'WARN'
+      );
     }
 
-    // Success login
+    res.json({ success: true, message: 'Si el correo está registrado, se ha enviado un código OTP.' });
+  });
+
+  // Auth: Login with OTP
+  app.post('/api/auth/login', (req, res) => {
+    const { email, otp } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email y código OTP son requeridos' });
+    }
+
+    const otpData = otpStore.get(email);
+    
+    if (!otpData) {
+      db.logAuditEvent('LOGIN_FAILED_NO_OTP', 'profiles', undefined, null, { email }, null, undefined, 'WARN');
+      return res.status(401).json({ error: 'No hay un código OTP activo para este correo' });
+    }
+
+    if (otpData.lockoutUntil && otpData.lockoutUntil > Date.now()) {
+      return res.status(429).json({ error: 'Demasiados intentos. Cuenta bloqueada temporalmente.' });
+    }
+
+    if (Date.now() > otpData.expiresAt) {
+      otpStore.delete(email);
+      return res.status(401).json({ error: 'El código OTP ha expirado' });
+    }
+
+    if (otpData.otp !== otp) {
+      otpData.attempts += 1;
+      
+      if (otpData.attempts >= 3) {
+        otpData.lockoutUntil = Date.now() + 15 * 60 * 1000; // 15 mins
+        db.logAuditEvent('LOGIN_LOCKED_OUT', 'profiles', undefined, null, { email }, null, undefined, 'CRITICAL');
+        return res.status(429).json({ error: 'Demasiados intentos. Código invalidado por 15 minutos.' });
+      }
+      
+      otpStore.set(email, otpData);
+      db.logAuditEvent('LOGIN_FAILED_OTP_MISMATCH', 'profiles', undefined, null, { email, attempt: otpData.attempts }, null, undefined, 'WARN');
+      return res.status(401).json({ error: 'Código incorrecto' });
+    }
+
+    const profile = db.profiles.find(p => p.email === email && p.is_active);
+    
+    if (!profile) {
+      db.logAuditEvent('LOGIN_FAILED_USER_INACTIVE', 'profiles', undefined, null, { email }, null, undefined, 'WARN');
+      return res.status(401).json({ error: 'Usuario no registrado o inactivo' });
+    }
+
+    // Success login - invalidate OTP
+    otpStore.delete(email);
+
+    // Generate JWT
+    const token = jwt.sign(
+      { id: profile.id, email: profile.email, role: profile.role },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
     db.logAuditEvent(
       'LOGIN_SUCCESS',
       'profiles',
       profile.id,
       null,
-      undefined,
+      { login_type: 'otp_jwt' },
       profile,
       undefined,
       'INFO'
     );
 
-    res.json({ user: profile, token: profile.email });
+    res.json({ user: profile, token });
   });
 
   // Auth: Solicitud de Registro / Acceso
@@ -702,14 +795,21 @@ const PORT = 3000;
       return res.status(401).send('No autorizado. Token requerido.');
     }
 
-    const user = db.profiles.find(p => p.email === token && p.is_active);
+    let user;
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as any;
+      user = db.profiles.find(p => p.id === payload.id && p.email === payload.email && p.is_active);
+    } catch (err) {
+      // Invalid token
+    }
+
     if (!user || user.role !== 'superadmin') {
       db.logAuditEvent(
         'UNAUTHORIZED_EXPORT_ATTEMPT',
         'employees',
         undefined,
         null,
-        { token_attempted: token },
+        { token_attempted: 'JWT_TOKEN' },
         null,
         undefined,
         'CRITICAL'
@@ -746,10 +846,7 @@ const PORT = 3000;
           extension: 'png',
         });
         // Add image to A1:B4
-        coverSheet.addImage(imageId, {
-          tl: { col: 1, row: 1 },
-          br: { col: 2, row: 4 }
-        });
+        coverSheet.addImage(imageId, 'B1:C4');
       }
 
       coverSheet.mergeCells('C2:I4');
@@ -975,14 +1072,21 @@ const PORT = 3000;
       return res.status(401).send('No autorizado. Token requerido.');
     }
 
-    const user = db.profiles.find(p => p.email === token && p.is_active);
+    let user;
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as any;
+      user = db.profiles.find(p => p.id === payload.id && p.email === payload.email && p.is_active);
+    } catch (err) {
+      // Invalid token
+    }
+
     if (!user || user.role !== 'superadmin') {
       db.logAuditEvent(
         'UNAUTHORIZED_EXPORT_ATTEMPT_PDF',
         'employees',
         undefined,
         null,
-        { token_attempted: token },
+        { token_attempted: 'JWT_TOKEN' },
         null,
         undefined,
         'CRITICAL'
