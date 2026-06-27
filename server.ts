@@ -14,6 +14,14 @@ const PORT = 3000;
   // Body parser
   app.use(express.json());
 
+  // Rewrite request URL for Vercel deployment so that `/api` is prefixed if missing.
+  app.use((req, res, next) => {
+    if (process.env.VERCEL && !req.url.startsWith('/api')) {
+      req.url = '/api' + req.url;
+    }
+    next();
+  });
+
   // Simple Session Store simulated in memory
   // In a production app, this would use secure HTTP-only cookies and JWTs.
   // Under SGSI / ISO 27001 rules, we enforce authorization headers.

@@ -60,7 +60,7 @@ export function DeptIndicatorsTable({ data }: DeptIndicatorsTableProps) {
   return (
     <div id="dept-indicators-table" className="p-5 bg-[#13132A] border border-purple-900/20 rounded-xl shadow-lg flex flex-col space-y-4">
       <div>
-        <h3 className="text-base font-semibold text-white">Tabla de Análisis de Indicadores por Departamento</h3>
+        <h3 className="text-base font-semibold text-white">Tabla de Análisis de Indicadores por Rol</h3>
         <p className="text-xs text-purple-400 mt-0.5">Reportes consolidados con alertas de umbrales críticos de seguridad corporativa</p>
       </div>
 
@@ -69,7 +69,7 @@ export function DeptIndicatorsTable({ data }: DeptIndicatorsTableProps) {
           <thead>
             <tr className="bg-indigo-950/60 text-slate-300 font-semibold uppercase tracking-wider border-b border-indigo-900/50">
               <th className="p-3.5 cursor-pointer select-none hover:bg-indigo-900/30" onClick={() => handleSort('department')}>
-                Departamento {renderSortIcon('department')}
+                Rol {renderSortIcon('department')}
               </th>
               <th className="p-3.5 text-center cursor-pointer select-none hover:bg-indigo-900/30" onClick={() => handleSort('avg_years')}>
                 Tiempo Prom. Cargo {renderSortIcon('avg_years')}

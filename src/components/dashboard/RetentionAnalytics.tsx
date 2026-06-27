@@ -87,6 +87,14 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
   // Program editing and display states
   const [editingProgramId, setEditingProgramId] = useState<string | null>(null);
   const [expandedProgramId, setExpandedProgramId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: 'program' | 'enrollment';
+    id?: string;
+    employeeId?: string;
+    trainingId?: string;
+    name: string;
+  } | null>(null);
+  const [customError, setCustomError] = useState<string | null>(null);
 
   // Load analytics stats from server
   const fetchStats = async () => {
@@ -115,7 +123,7 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
     if (token) {
       fetchStats();
     }
-  }, [token]);
+  }, [token, employees]);
 
   const handleCreateProgram = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,11 +185,7 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
     }
   };
 
-  const handleDeleteProgram = async (id: string, name: string) => {
-    if (!window.confirm(`⚠️ ADVERTENCIA: ¿Está seguro de que desea eliminar permanentemente el curso "${name}"? Esto también eliminará de manera definitiva todos los registros de calificaciones y matrículas para este curso.`)) {
-      return;
-    }
-
+  const executeDeleteProgram = async (id: string, name: string) => {
     try {
       const res = await fetch(`/api/training/programs/${id}`, {
         method: 'DELETE',
@@ -206,15 +210,11 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
       await fetchStats();
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setCustomError(err.message || 'No se pudo eliminar el programa');
     }
   };
 
-  const handleDeleteEnrollment = async (employeeId: string, trainingId: string, employeeName: string) => {
-    if (!window.confirm(`¿Está seguro de que desea eliminar permanentemente la matrícula/inscripción de ${employeeName}?`)) {
-      return;
-    }
-
+  const executeDeleteEnrollment = async (employeeId: string, trainingId: string, employeeName: string) => {
     try {
       const res = await fetch(`/api/training/enrollments/${employeeId}/${trainingId}`, {
         method: 'DELETE',
@@ -233,14 +233,31 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
             console.error('Failed to parse error response JSON:', e);
           }
         }
-        throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText || 'Error al eliminar matrícula'}`);
+        throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText || 'Error al eliminar la matrícula'}`);
       }
 
       await fetchStats();
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setCustomError(err.message || 'No se pudo eliminar la matrícula');
     }
+  };
+
+  const handleDeleteProgram = (id: string, name: string) => {
+    setDeleteConfirm({
+      type: 'program',
+      id,
+      name
+    });
+  };
+
+  const handleDeleteEnrollment = (employeeId: string, trainingId: string, employeeName: string) => {
+    setDeleteConfirm({
+      type: 'enrollment',
+      employeeId,
+      trainingId,
+      name: employeeName
+    });
   };
 
   const handleEnrollEmployee = async (e: React.FormEvent) => {
@@ -372,11 +389,14 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
   const chartColors = ['#6C3CE1', '#06B6D4', '#F5A623', '#10B981', '#EC4899', '#8B5CF6'];
 
   // Flight Risk List filtered
-  const filteredFlightRisk = stats.flightRiskEmployees.filter((emp: any) => 
-    emp.name.toLowerCase().includes(flightRiskSearch.toLowerCase()) ||
-    emp.department.toLowerCase().includes(flightRiskSearch.toLowerCase()) ||
-    emp.position.toLowerCase().includes(flightRiskSearch.toLowerCase())
-  );
+  const filteredFlightRisk = React.useMemo(() => {
+    return stats.flightRiskEmployees.filter((emp: any) => {
+      const q = flightRiskSearch.toLowerCase();
+      return emp.name.toLowerCase().includes(q) ||
+             emp.department.toLowerCase().includes(q) ||
+             emp.position.toLowerCase().includes(q);
+    });
+  }, [stats.flightRiskEmployees, flightRiskSearch]);
 
   return (
     <div className="space-y-6">
@@ -483,9 +503,9 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
               <div className="mb-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Building className="w-4 h-4 text-purple-400" />
-                  Tasa de Rotación por Departamento
+                  Tasa de Rotación por Rol
                 </h3>
-                <p className="text-[11px] text-slate-400">Comparativa de desvinculaciones por área laboral</p>
+                <p className="text-[11px] text-slate-400">Comparativa de desvinculaciones por rol laboral</p>
               </div>
               <div className="w-full h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -968,7 +988,7 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-400 font-semibold block">Departamento Propietario *</label>
+                  <label className="text-slate-400 font-semibold block">Rol Propietario *</label>
                   <select
                     required
                     value={programDeptId}
@@ -1153,6 +1173,81 @@ export default function RetentionAnalytics({ token, departments, employees, onRe
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CUSTOM DELETE CONFIRMATION */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-[#070712]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#12122B] border border-purple-800/40 rounded-2xl w-full max-w-md p-6 shadow-[0_0_30px_rgba(108,60,225,0.15)] space-y-4">
+            <div className="flex justify-between items-center border-b border-indigo-950 pb-3">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-rose-500" />
+                Confirmar Eliminación
+              </h3>
+              <button 
+                onClick={() => setDeleteConfirm(null)}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-300 leading-relaxed space-y-2">
+              <p>
+                ¿Está seguro de que desea eliminar permanentemente {deleteConfirm.type === 'program' ? 'el curso' : 'la matrícula de'} <strong className="text-white font-semibold">"{deleteConfirm.name}"</strong>?
+              </p>
+              {deleteConfirm.type === 'program' && (
+                <p className="text-rose-400 font-medium bg-rose-500/5 border border-rose-500/10 p-2.5 rounded-lg leading-normal">
+                  ⚠️ ADVERTENCIA: Esta acción eliminará de manera definitiva todos los registros de calificaciones y matrículas para este curso. Esta operación es irreversible.
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2 rounded-xl bg-slate-900 border border-indigo-950 hover:bg-slate-800 text-slate-400 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const state = deleteConfirm;
+                  setDeleteConfirm(null);
+                  if (state.type === 'program') {
+                    await executeDeleteProgram(state.id!, state.name);
+                  } else {
+                    await executeDeleteEnrollment(state.employeeId!, state.trainingId!, state.name);
+                  }
+                }}
+                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                Eliminar Registro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CUSTOM ERROR DISPATCH */}
+      {customError && (
+        <div className="fixed inset-0 bg-[#070712]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#12122B] border border-rose-900/40 rounded-2xl w-full max-w-sm p-6 shadow-[0_0_20px_rgba(244,63,94,0.15)] space-y-4">
+            <div className="flex items-center gap-2 text-rose-500 border-b border-rose-950/40 pb-3">
+              <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Error de Solicitud</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-normal">{customError}</p>
+            <button
+              onClick={() => setCustomError(null)}
+              className="w-full py-2 rounded-xl bg-rose-600/10 border border-rose-500/20 hover:bg-rose-600 hover:text-white text-rose-400 text-xs font-bold transition-all cursor-pointer"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

@@ -98,6 +98,12 @@ export class DatabaseStore {
         this.emails = data.emails || [];
         this.trainingPrograms = data.trainingPrograms || [];
         this.employeeTrainings = data.employeeTrainings || [];
+        const hasOldDepts = this.departments.some(d => d.name === 'Ventas y Marketing' || d.name === 'Finanzas' || d.name === 'Operaciones') || this.departments.length !== 8;
+        if (hasOldDepts) {
+          console.log('Old departments detected. Re-seeding with new roles...');
+          this.seedDatabase();
+          this.saveDatabase();
+        }
         loadedFromLocal = true;
       } catch (err) {
         console.error('Error loading database, re-seeding...', err);
@@ -375,11 +381,14 @@ export class DatabaseStore {
 
     // 2. Seed Departments
     this.departments = [
-      { id: 'd-tech', name: 'Tecnología', code: 'TEC', budget: 520000000, created_at: '2024-01-10T08:00:00Z' },
       { id: 'd-hr', name: 'Recursos Humanos', code: 'RRHH', budget: 180000000, created_at: '2024-01-10T08:00:00Z' },
-      { id: 'd-sales', name: 'Ventas y Marketing', code: 'VEN', budget: 350000000, created_at: '2024-01-15T08:00:00Z' },
-      { id: 'd-fin', name: 'Finanzas', code: 'FIN', budget: 240000000, created_at: '2024-01-15T08:00:00Z' },
-      { id: 'd-ops', name: 'Operaciones', code: 'OPE', budget: 280000000, created_at: '2024-01-20T08:00:00Z' }
+      { id: 'd-fin', name: 'Administrativo y Financiero', code: 'ADMF', budget: 240000000, created_at: '2024-01-15T08:00:00Z' },
+      { id: 'd-prod', name: 'Producción', code: 'PROD', budget: 350000000, created_at: '2024-01-15T08:00:00Z' },
+      { id: 'd-maint', name: 'Mantenimiento', code: 'MANT', budget: 150000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'd-sost', name: 'Sostenibilidad', code: 'SOST', budget: 120000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'd-ops', name: 'Compras y Logística', code: 'COML', budget: 280000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'd-qual', name: 'Calidad del Producto', code: 'CALI', budget: 130000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'd-tech', name: 'Tecnología', code: 'TEC', budget: 520000000, created_at: '2024-01-10T08:00:00Z' }
     ];
 
     // 3. Seed Positions
@@ -395,18 +404,30 @@ export class DatabaseStore {
       { id: 'pos-hr-analyst', title: 'Analista de Selección', department_id: 'd-hr', salary_min: 3500000, salary_max: 5500000, created_at: '2024-01-10T08:00:00Z' },
       { id: 'pos-hr-clima', title: 'Especialista en Clima y Cultura', department_id: 'd-hr', salary_min: 4500000, salary_max: 7000000, created_at: '2024-01-11T08:00:00Z' },
       
-      // Sales
-      { id: 'pos-sales-mgr', title: 'Gerente Comercial', department_id: 'd-sales', salary_min: 9000000, salary_max: 14000000, created_at: '2024-01-15T08:00:00Z' },
-      { id: 'pos-sales-exec', title: 'Ejecutivo de Cuentas Enterprise', department_id: 'd-sales', salary_min: 5000000, salary_max: 9000000, created_at: '2024-01-15T08:00:00Z' },
-      { id: 'pos-sales-rep', title: 'Representante de Ventas (SDR)', department_id: 'd-sales', salary_min: 3000000, salary_max: 4500000, created_at: '2024-01-15T08:00:00Z' },
-
-      // Finance
-      { id: 'pos-fin-dir', title: 'Director Financiero', department_id: 'd-fin', salary_min: 11000000, salary_max: 16500000, created_at: '2024-01-15T08:00:00Z' },
+      // Administrativo y Financiero
+      { id: 'pos-fin-dir', title: 'Director Administrativo y Financiero', department_id: 'd-fin', salary_min: 11000000, salary_max: 16500000, created_at: '2024-01-15T08:00:00Z' },
       { id: 'pos-fin-analyst', title: 'Analista Contable', department_id: 'd-fin', salary_min: 4000000, salary_max: 6500000, created_at: '2024-01-15T08:00:00Z' },
 
-      // Ops
-      { id: 'pos-ops-coord', title: 'Coordinador de Logística', department_id: 'd-ops', salary_min: 5000000, salary_max: 8000000, created_at: '2024-01-20T08:00:00Z' },
-      { id: 'pos-ops-assistant', title: 'Auxiliar de Operaciones', department_id: 'd-ops', salary_min: 2500000, salary_max: 3800000, created_at: '2024-01-20T08:00:00Z' }
+      // Producción
+      { id: 'pos-prod-mgr', title: 'Gerente de Producción', department_id: 'd-prod', salary_min: 9000000, salary_max: 14000000, created_at: '2024-01-15T08:00:00Z' },
+      { id: 'pos-prod-sup', title: 'Supervisor de Planta', department_id: 'd-prod', salary_min: 5000000, salary_max: 9000000, created_at: '2024-01-15T08:00:00Z' },
+      { id: 'pos-prod-op', title: 'Operario de Producción', department_id: 'd-prod', salary_min: 2000000, salary_max: 3500000, created_at: '2024-01-15T08:00:00Z' },
+
+      // Mantenimiento
+      { id: 'pos-maint-head', title: 'Jefe de Mantenimiento', department_id: 'd-maint', salary_min: 6000000, salary_max: 10000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'pos-maint-tech', title: 'Técnico de Mantenimiento', department_id: 'd-maint', salary_min: 2500000, salary_max: 4500000, created_at: '2024-01-20T08:00:00Z' },
+
+      // Sostenibilidad
+      { id: 'pos-sost-head', title: 'Jefe de Sostenibilidad', department_id: 'd-sost', salary_min: 6000000, salary_max: 10000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'pos-sost-spec', title: 'Especialista Ambiental', department_id: 'd-sost', salary_min: 3500000, salary_max: 6000000, created_at: '2024-01-20T08:00:00Z' },
+
+      // Compras y Logística
+      { id: 'pos-ops-coord', title: 'Coordinador de Logística y Compras', department_id: 'd-ops', salary_min: 5000000, salary_max: 8000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'pos-ops-assistant', title: 'Auxiliar de Compras y Logística', department_id: 'd-ops', salary_min: 2500000, salary_max: 3800000, created_at: '2024-01-20T08:00:00Z' },
+
+      // Calidad del Producto
+      { id: 'pos-qual-analyst', title: 'Analista de Calidad', department_id: 'd-qual', salary_min: 3500000, salary_max: 6000000, created_at: '2024-01-20T08:00:00Z' },
+      { id: 'pos-qual-insp', title: 'Inspector de Calidad', department_id: 'd-qual', salary_min: 2500000, salary_max: 4500000, created_at: '2024-01-20T08:00:00Z' }
     ];
 
     // Helper functions to calculate ages and years in role based on dates in 2026
@@ -488,8 +509,8 @@ export class DatabaseStore {
         age: getAge('1985-06-08'),
         hire_date: '2020-05-01',
         years_in_role: getYears('2020-05-01'),
-        department_id: 'd-sales',
-        position_id: 'pos-sales-mgr',
+        department_id: 'd-prod',
+        position_id: 'pos-prod-mgr',
         supervisor_id: 'emp-ceo',
         salary: 11500000,
         status: 'activo',
@@ -725,8 +746,8 @@ export class DatabaseStore {
         age: getAge('1984-03-12'),
         hire_date: '2021-04-10',
         years_in_role: getYears('2021-04-10'),
-        department_id: 'd-sales',
-        position_id: 'pos-sales-exec',
+        department_id: 'd-prod',
+        position_id: 'pos-prod-sup',
         supervisor_id: 'emp-sales-head',
         salary: 7500000,
         status: 'activo',
@@ -746,8 +767,8 @@ export class DatabaseStore {
         age: getAge('1988-12-19'),
         hire_date: '2022-02-15',
         years_in_role: getYears('2022-02-15'),
-        department_id: 'd-sales',
-        position_id: 'pos-sales-exec',
+        department_id: 'd-prod',
+        position_id: 'pos-prod-sup',
         supervisor_id: 'emp-sales-head',
         salary: 7200000,
         status: 'activo',
@@ -767,10 +788,10 @@ export class DatabaseStore {
         age: getAge('1995-11-03'),
         hire_date: '2023-05-10',
         years_in_role: getYears('2023-05-10'),
-        department_id: 'd-sales',
-        position_id: 'pos-sales-rep',
+        department_id: 'd-maint',
+        position_id: 'pos-maint-head',
         supervisor_id: 'emp-sales-head',
-        salary: 3500000,
+        salary: 6500000,
         status: 'activo',
         satisfaction_score: 8.5,
         performance_score: 9.2,
@@ -788,10 +809,10 @@ export class DatabaseStore {
         age: getAge('1997-02-28'),
         hire_date: '2023-09-01',
         years_in_role: getYears('2023-09-01'),
-        department_id: 'd-sales',
-        position_id: 'pos-sales-rep',
+        department_id: 'd-sost',
+        position_id: 'pos-sost-head',
         supervisor_id: 'emp-sales-head',
-        salary: 3200000,
+        salary: 6200000,
         status: 'activo',
         satisfaction_score: 5.1, // 😟 UNSATISFIED
         performance_score: 6.8,
@@ -941,8 +962,8 @@ export class DatabaseStore {
         age: getAge('1989-11-12'),
         hire_date: '2021-03-15',
         years_in_role: getYears('2021-03-15'),
-        department_id: 'd-sales',
-        position_id: 'pos-sales-exec',
+        department_id: 'd-qual',
+        position_id: 'pos-qual-analyst',
         supervisor_id: 'emp-sales-head',
         salary: 7100000,
         status: 'vacaciones',
@@ -1018,7 +1039,7 @@ export class DatabaseStore {
         requested_role: 'editor',
         status: 'approved',
         reviewed_by: 'p-super2',
-        review_notes: 'Aprobado para la gestión del departamento de RRHH.',
+        review_notes: 'Aprobado para la gestión del área de RRHH.',
         requested_at: new Date(Date.now() - 3600000 * 48).toISOString(),
         reviewed_at: new Date(Date.now() - 3600000 * 46).toISOString(),
       },
@@ -1105,12 +1126,12 @@ export class DatabaseStore {
       },
       {
         id: 'train-3',
-        name: 'Estrategia de Ventas Enterprise e Inbound',
-        description: 'Formación avanzada en prospección de cuentas enterprise y metodologías de negociación consultiva.',
+        name: 'Optimización de Procesos de Producción',
+        description: 'Capacitación en control de calidad en planta, metodologías lean y optimización de líneas productivas.',
         start_date: '2026-04-10',
         end_date: '2026-04-30',
         cost: 1200000,
-        department_id: 'd-sales',
+        department_id: 'd-prod',
         created_at: '2026-03-25T08:00:00Z'
       },
       {
@@ -1698,7 +1719,7 @@ export class DatabaseStore {
     // 1. Individual Absence days threshold (> 15 days)
     if (employee.absence_days > 15) {
       const alertTitle = '🚨 Alerta de Ausentismo Crítico';
-      const alertBody = `El colaborador ${employee.full_name} del departamento ${departmentName} acumula ${employee.absence_days} días de ausencia (Límite crítico: 15 días).`;
+      const alertBody = `El colaborador ${employee.full_name} del rol ${departmentName} acumula ${employee.absence_days} días de ausencia (Límite crítico: 15 días).`;
 
       // Create internal notifications for superadmins
       this.createAlertNotification('alert_absence', alertTitle, alertBody, { employeeId: employee.id, absence_days: employee.absence_days });
@@ -1751,7 +1772,7 @@ export class DatabaseStore {
           
           <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 5px 0;"><strong>Colaborador:</strong> ${employee.full_name} (${employee.employee_code})</p>
-            <p style="margin: 5px 0;"><strong>Departamento:</strong> ${departmentName}</p>
+            <p style="margin: 5px 0;"><strong>Rol:</strong> ${departmentName}</p>
             <p style="margin: 5px 0;"><strong>Métrica Actual:</strong> <span style="color: #ef4444; font-weight: bold;">${metric}</span></p>
             <p style="margin: 5px 0;"><strong>Umbral de Tolerancia:</strong> ${threshold}</p>
           </div>
@@ -1831,7 +1852,7 @@ export class DatabaseStore {
 
     // 4. Retención del Talento (Talent Retention Rate)
     const startingHeadcount = activeEmps.length + inactiveEmps.length;
-    const retentionRate = startingHeadcount > 0 ? parseFloat(((activeEmps.length / startingHeadcount) * 100).toFixed(1)) : 100;
+    const retentionRate = startingHeadcount > 0 ? parseFloat(((activeEmps.length / startingHeadcount) * 100).toFixed(1)) : 0;
 
     // Flight Risk Matrix
     const flightRiskEmployees = activeEmps.map(emp => {

@@ -39,7 +39,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-// 1. Colaboradores por Departamento (gráfico de barras horizontales)
+// 1. Colaboradores por Rol (gráfico de barras horizontales)
 export function BarChartDept({ data }: { data: any[] }) {
   const chartData = data.map(item => ({
     name: item.department,
@@ -50,8 +50,8 @@ export function BarChartDept({ data }: { data: any[] }) {
   return (
     <div className="p-4 bg-[#13132A] border border-purple-900/20 rounded-xl flex flex-col justify-between shadow-lg h-[320px]">
       <div className="mb-2">
-        <h3 className="text-sm font-semibold text-white">Colaboradores por Departamento</h3>
-        <p className="text-[10px] text-purple-400">Distribución de nómina activa por área</p>
+        <h3 className="text-sm font-semibold text-white">Colaboradores por Rol</h3>
+        <p className="text-[10px] text-purple-400">Distribución de nómina activa por rol</p>
       </div>
       <div className="w-full h-[240px]">
         <ResponsiveContainer width="100%" height="100%">

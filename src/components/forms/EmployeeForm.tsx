@@ -35,10 +35,14 @@ export function EmployeeForm({ initialData, onSave, onCancel, departments, posit
   const [absenceDays, setAbsenceDays] = useState(initialData?.absence_days || 0);
 
   // Dynamic filter for positions based on selected department
-  const filteredPositions = positions.filter(p => p.department_id === selectedDept);
+  const filteredPositions = React.useMemo(() => {
+    return positions.filter(p => p.department_id === selectedDept);
+  }, [positions, selectedDept]);
 
   // Supervisor options (all active employees except current employee being edited)
-  const availableSupervisors = employees.filter(e => e.status === 'activo' && e.id !== initialData?.id);
+  const availableSupervisors = React.useMemo(() => {
+    return employees.filter(e => e.status === 'activo' && e.id !== initialData?.id);
+  }, [employees, initialData?.id]);
 
   // Set initial position if department changed or on mount
   useEffect(() => {
@@ -192,7 +196,7 @@ export function EmployeeForm({ initialData, onSave, onCancel, departments, posit
         {/* Seccion 2: Relación Organizacional */}
         <div className="bg-[#0B0B1A]/40 p-4 rounded-xl border border-indigo-950/40 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block mb-1.5 text-slate-400 font-semibold text-purple-300">Departamento <span className="text-rose-400">*</span></label>
+            <label className="block mb-1.5 text-slate-400 font-semibold text-purple-300">Rol <span className="text-rose-400">*</span></label>
             <select 
               value={selectedDept} 
               onChange={(e) => setSelectedDept(e.target.value)}

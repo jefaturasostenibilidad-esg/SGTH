@@ -20,6 +20,8 @@ import {
   Check, 
   X, 
   ChevronRight, 
+  ChevronLeft,
+  Menu,
   UserCheck, 
   RefreshCw, 
   Eye, 
@@ -56,6 +58,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'admin' | 'emails' | 'retention'>('dashboard');
   const [adminSubTab, setAdminSubTab] = useState<'requests' | 'roles' | 'audit' | 'database'>('requests');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('sgth_sidebar_collapsed') === 'true';
+  });
 
   // Form / Modal states
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -424,17 +429,22 @@ export default function App() {
   };
 
   // Search filter implementation for employees list
-  const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          emp.employee_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (emp.position_title && emp.position_title.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesDept = filterDept === 'all' || emp.department_id === filterDept;
-    const matchesStatus = filterStatus === 'all' || emp.status === filterStatus;
-    return matchesSearch && matchesDept && matchesStatus;
-  });
+  const filteredEmployees = React.useMemo(() => {
+    return employees.filter(emp => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = emp.full_name.toLowerCase().includes(q) || 
+                            emp.employee_code.toLowerCase().includes(q) ||
+                            (emp.position_title && emp.position_title.toLowerCase().includes(q));
+      const matchesDept = filterDept === 'all' || emp.department_id === filterDept;
+      const matchesStatus = filterStatus === 'all' || emp.status === filterStatus;
+      return matchesSearch && matchesDept && matchesStatus;
+    });
+  }, [employees, searchQuery, filterDept, filterStatus]);
 
   // Count unread alerts/notifications
-  const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
+  const unreadNotificationsCount = React.useMemo(() => {
+    return notifications.filter(n => !n.is_read).length;
+  }, [notifications]);
 
   if (loading) {
     return (
@@ -627,11 +637,23 @@ export default function App() {
   const isSuper = currentUser.role === 'superadmin';
   const isEditor = currentUser.role === 'editor';
 
+  const handleNavigation = (tab: 'dashboard' | 'employees' | 'admin' | 'emails' | 'retention') => {
+    setActiveTab(tab);
+    setShowForm(false);
+    setEditingEmployee(null);
+    setSidebarCollapsed(true);
+    localStorage.setItem('sgth_sidebar_collapsed', 'true');
+  };
+
   return (
     <div className="bg-[#0B0B1A] min-h-screen font-sans text-slate-300 flex flex-col md:flex-row relative">
       
-      {/* 1. LEFT SIDEBAR NAVIGATION (240px wide) */}
-      <aside className="w-full md:w-60 bg-[#13132A] border-r border-purple-900/10 flex flex-col justify-between shrink-0 h-auto md:h-screen sticky top-0 z-40">
+      {/* 1. LEFT SIDEBAR NAVIGATION (Collapsible, transition supported) */}
+      <aside className={`bg-[#13132A] border-r border-purple-900/10 flex flex-col justify-between shrink-0 transition-all duration-300 z-40 ${
+        sidebarCollapsed 
+          ? 'w-0 h-0 md:w-0 md:h-screen overflow-hidden opacity-0 pointer-events-none border-none' 
+          : 'w-full md:w-60 h-auto md:h-screen sticky top-0'
+      }`}>
         <div className="flex flex-col">
           {/* Brand Logo Header */}
           <div className="p-5 border-b border-indigo-950 flex items-center justify-between bg-indigo-950/15">
@@ -645,8 +667,20 @@ export default function App() {
               </div>
             </div>
             
-            {/* Connection dot */}
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSidebarCollapsed(true);
+                  localStorage.setItem('sgth_sidebar_collapsed', 'true');
+                }}
+                className="p-1 rounded-md border border-purple-900/10 text-slate-400 hover:text-white hover:bg-indigo-950/30 transition-all duration-200 cursor-pointer"
+                title="Ocultar menú lateral"
+              >
+                <ChevronLeft className="w-4 h-4 shrink-0" />
+              </button>
+              {/* Connection dot */}
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+            </div>
           </div>
 
           {/* User Section details */}
@@ -669,7 +703,7 @@ export default function App() {
           {/* Navigation Links */}
           <nav className="p-4 space-y-1 text-xs font-bold uppercase tracking-wider">
             <button
-              onClick={() => { setActiveTab('dashboard'); setShowForm(false); setEditingEmployee(null); }}
+              onClick={() => handleNavigation('dashboard')}
               className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 cursor-pointer ${
                 activeTab === 'dashboard'
                   ? 'bg-purple-600 text-white shadow-md'
@@ -683,7 +717,7 @@ export default function App() {
             {/* Rotación y Desarrollo Tab */}
             {(isSuper || isEditor) ? (
               <button
-                onClick={() => { setActiveTab('retention'); setShowForm(false); setEditingEmployee(null); }}
+                onClick={() => handleNavigation('retention')}
                 className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 cursor-pointer ${
                   activeTab === 'retention'
                     ? 'bg-purple-600 text-white shadow-md'
@@ -703,7 +737,7 @@ export default function App() {
             {/* Editor-restricted Tab */}
             {(isSuper || isEditor) ? (
               <button
-                onClick={() => { setActiveTab('employees'); setShowForm(false); setEditingEmployee(null); }}
+                onClick={() => handleNavigation('employees')}
                 className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 cursor-pointer ${
                   activeTab === 'employees'
                     ? 'bg-purple-600 text-white shadow-md'
@@ -723,7 +757,7 @@ export default function App() {
             {/* Superadmin Console Tab */}
             {isSuper ? (
               <button
-                onClick={() => { setActiveTab('admin'); setShowForm(false); setEditingEmployee(null); }}
+                onClick={() => handleNavigation('admin')}
                 className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 cursor-pointer ${
                   activeTab === 'admin'
                     ? 'bg-purple-600 text-white shadow-md'
@@ -742,7 +776,7 @@ export default function App() {
 
             {/* Simulated Email Sandbox Link */}
             <button
-              onClick={() => { setActiveTab('emails'); setShowForm(false); setEditingEmployee(null); }}
+              onClick={() => handleNavigation('emails')}
               className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 cursor-pointer ${
                 activeTab === 'emails'
                   ? 'bg-purple-600 text-white shadow-md'
@@ -774,21 +808,38 @@ export default function App() {
         
         {/* Top Header Row with status & alerts bell */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-indigo-950/60 pb-5">
-          <div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-white uppercase tracking-tight">
-              {activeTab === 'dashboard' && 'Administración de Talento Humano'}
-              {activeTab === 'retention' && 'Rotación y Desarrollo Organizacional'}
-              {activeTab === 'employees' && 'Directorio de Colaboradores'}
-              {activeTab === 'admin' && 'Consola de Control de Seguridad (SGSI)'}
-              {activeTab === 'emails' && 'Servicio Corporativo de Notificación por Email'}
-            </h1>
-            <p className="text-xs text-purple-400 font-medium">
-              {activeTab === 'dashboard' && 'Análisis corporativo en tiempo real e índices organizacionales'}
-              {activeTab === 'retention' && 'Medición inteligente de rotación, retención, planes de capacitación y matriz de riesgo de fuga'}
-              {activeTab === 'employees' && 'Gestión activa, contratos, salarios, ausentismos y evaluaciones'}
-              {activeTab === 'admin' && 'Administre accesos directos, bitácora de auditorías y exportaciones de nómina'}
-              {activeTab === 'emails' && 'Verifique el despacho inalterable de correos corporativos salientes'}
-            </p>
+          <div className="flex items-start gap-3.5">
+            {/* Sidebar toggle button (accessible from any view) */}
+            <button
+              onClick={() => {
+                setSidebarCollapsed(prev => {
+                  const newVal = !prev;
+                  localStorage.setItem('sgth_sidebar_collapsed', String(newVal));
+                  return newVal;
+                });
+              }}
+              className="p-2.5 rounded-xl border bg-[#13132A] border-purple-900/20 text-slate-400 hover:text-white hover:bg-indigo-950/30 transition-all duration-200 cursor-pointer shrink-0 mt-0.5"
+              title={sidebarCollapsed ? "Mostrar Menú" : "Ocultar Menú"}
+            >
+              <Menu className="w-4.5 h-4.5" />
+            </button>
+
+            <div>
+              <h1 className="text-xl md:text-2xl font-extrabold text-white uppercase tracking-tight">
+                {activeTab === 'dashboard' && 'Administración de Talento Humano'}
+                {activeTab === 'retention' && 'Rotación y Desarrollo Organizacional'}
+                {activeTab === 'employees' && 'Directorio de Colaboradores'}
+                {activeTab === 'admin' && 'Consola de Control de Seguridad (SGSI)'}
+                {activeTab === 'emails' && 'Servicio Corporativo de Notificación por Email'}
+              </h1>
+              <p className="text-xs text-purple-400 font-medium">
+                {activeTab === 'dashboard' && 'Análisis corporativo en tiempo real e índices organizacionales'}
+                {activeTab === 'retention' && 'Medición inteligente de rotación, retención, planes de capacitación y matriz de riesgo de fuga'}
+                {activeTab === 'employees' && 'Gestión activa, contratos, salarios, ausentismos y evaluaciones'}
+                {activeTab === 'admin' && 'Administre accesos directos, bitácora de auditorías y exportaciones de nómina'}
+                {activeTab === 'emails' && 'Verifique el despacho inalterable de correos corporativos salientes'}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 self-end sm:self-center">
@@ -983,13 +1034,13 @@ export default function App() {
 
                   <div className="flex flex-wrap items-center gap-3 w-full md:w-auto text-xs font-semibold text-slate-400">
                     <div className="flex items-center gap-1.5">
-                      <span>Área:</span>
+                      <span>Rol:</span>
                       <select
                         value={filterDept}
                         onChange={(e) => setFilterDept(e.target.value)}
                         className="bg-[#0B0B1A] border border-indigo-950 rounded-lg p-2 text-white outline-none focus:border-purple-600 font-sans cursor-pointer"
                       >
-                        <option value="all">Todos los Departamentos</option>
+                        <option value="all">Todos los Roles</option>
                         {departments.map(d => (
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
@@ -1377,7 +1428,7 @@ export default function App() {
                 {/* Grid details metadata */}
                 <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-400">
                   <div>
-                    <span className="block text-[10px] text-slate-500 uppercase">Departamento</span>
+                    <span className="block text-[10px] text-slate-500 uppercase">Rol</span>
                     <strong className="text-white font-bold text-sm block mt-0.5">{viewingEmployee.department_name}</strong>
                   </div>
 
